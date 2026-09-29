@@ -37,7 +37,7 @@ Above the editor you get a strip of thumbnails, drawn with the terminal's own gr
 
 ## Behaviour worth knowing
 
-- **The token is the manifest.** An image is sent when its `[image N]` token is in the message. Delete a token to leave that image out; delete them all (or clear the editor) and every queued image is still sent, because that is not a decision to drop a screenshot.
+- **The token is the manifest.** An image is queued when its `[image N]` token is in the editor, and dropped as soon as you delete that token: the thumbnail leaves with it, without waiting for the message. Clearing the editor therefore drops the queued images too; re-paste or use `/image-attach` to get them back. A submitted message that somehow has no token (RPC, print mode) still sends everything queued, so nothing is lost on a path with no editor to watch.
 - **pi does not render images in the transcript.** It only draws the text part of a user message, so each image leaves a one-line note behind. `/image-notes` turns the notes off; the images are still sent, and a message made only of images falls back to `(2 images attached)` so the turn is not blank.
 - **Queued images are cleared on send**, including while the model is streaming (`ctrl+v` mid-answer works: the image joins the steered or follow-up message).
 - **Limits** are enforced per message: 20 images and 32 MB by default. The extension asks before queueing anything over the limit.
@@ -103,7 +103,7 @@ npm test             # unit tests for sniffing, capture, attachments, config
 npm run typecheck    # tsc --noEmit
 ```
 
-Layout: `index.ts` (wiring: events, capture, commands), `lib/images.ts` (magic-byte sniffing, dimensions, formatting), `lib/raw-stdin.ts` (byte-level paste interception), `lib/paste.ts` (paste keybinding and dropped-path parsing), `lib/clipboard.ts` (clipboard backends), `lib/attachments.ts` (tokens, notes, the send-time transform), `lib/attachment-bar.ts` (thumbnail strip), `lib/config.ts` and `lib/settings.ts` (settings).
+Layout: `index.ts` (wiring: events, capture, editor reconciliation, commands), `lib/images.ts` (magic-byte sniffing, dimensions, formatting), `lib/raw-stdin.ts` (byte-level paste interception), `lib/paste.ts` (paste keybinding and dropped-path parsing), `lib/clipboard.ts` (clipboard backends), `lib/attachments.ts` (tokens, notes, the send-time transform), `lib/attachment-bar.ts` (thumbnail strip), `lib/config.ts` and `lib/settings.ts` (settings).
 
 The extension ships as TypeScript source — pi loads `.ts` entry points directly, so there is no build step.
 
@@ -114,3 +114,4 @@ pi reads stdin and decodes every chunk as UTF-8 before an extension sees it, whi
 ## License
 
 MIT
+# pi-inline-image-paste
