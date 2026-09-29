@@ -54,7 +54,12 @@ function fakeRuntime() {
 				if (content === undefined) calls.widgets.delete(key);
 				else calls.widgets.set(key, content);
 			},
-			pasteToEditor: (text) => calls.pasted.push(text),
+			pasteToEditor: (text) => {
+				calls.pasted.push(text);
+				// The real editor keeps what was pasted, so the fake must too: the
+				// extension reads the editor text back to notice deleted tokens.
+				calls.editorText += text;
+			},
 			getEditorText: () => calls.editorText,
 			setEditorText: (text) => {
 				calls.editorText = text;
@@ -154,6 +159,23 @@ test("a dropped image path becomes a pending image with a token", async () => {
 	assert.equal(second, undefined);
 });
 
+test("a single-quoted screenshot path becomes a pending image", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "piip-"));
+	const file = join(dir, "Screenshot 2026-09-29 at 18-37-57.png");
+	await writeFile(file, Buffer.from(pngBytes(320, 200)));
+
+	const runtime = await started();
+	runtime.ctx.cwd = dir;
+	// macOS screenshot apps copy a quoted path, so the quotes must not survive
+	// into the extension's own check that the payload is image-shaped.
+	const handler = runtime.calls.terminalHandlers[0];
+	assert.deepEqual(handler(`\x1b[200~'${file}'\x1b[201~`), { consume: true });
+	await new Promise((resolve) => setTimeout(resolve, 5));
+
+	assert.deepEqual(runtime.calls.pasted, ["[image 1] "]);
+	assert.equal(runtime.calls.widgets.size, 1);
+});
+
 test("input from another source never picks up pending images", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "piip-"));
 	const file = join(dir, "shot.png");
@@ -212,6 +234,46 @@ test("/image-attach, /image-list, and /image-clear drive the same pending list",
 	assert.equal(runtime.calls.widgets.size, 0);
 	const [input] = runtime.events.get("input");
 	assert.equal(input({ type: "input", text: "look  ", source: "interactive" }), undefined);
+});
+
+test("deleting a token in the editor drops the attachment", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "piip-"));
+	const file = join(dir, "shot.png");
+	await writeFile(file, Buffer.from(pngBytes(320, 200)));
+
+	const runtime = await started();
+	runtime.ctx.cwd = dir;
+	await attach(runtime, { name: file });
+	assert.equal(runtime.calls.editorText, "[image 1] ");
+	assert.equal(runtime.calls.widgets.size, 1);
+
+	// One backspace over the token, as the editor sees it.
+	runtime.calls.editorText = "[image ]";
+	const handler = runtime.calls.terminalHandlers[0];
+	assert.equal(handler("\x7f"), undefined);
+	await new Promise((resolve) => setTimeout(resolve, 10));
+
+	// The thumbnail goes with the token, without waiting for the message to send.
+	assert.equal(runtime.calls.widgets.size, 0);
+	const [input] = runtime.events.get("input");
+	assert.equal(input({ type: "input", text: "[image ]", source: "interactive" }), undefined);
+});
+
+test("clearing the whole editor drops the queued images too", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "piip-"));
+	const file = join(dir, "shot.png");
+	await writeFile(file, Buffer.from(pngBytes(320, 200)));
+
+	const runtime = await started();
+	runtime.ctx.cwd = dir;
+	await attach(runtime, { name: file });
+
+	runtime.calls.editorText = "";
+	runtime.calls.terminalHandlers[0]("\x15"); // ctrl+u
+	await new Promise((resolve) => setTimeout(resolve, 10));
+
+	assert.equal(runtime.calls.widgets.size, 0);
+	assert.ok(runtime.calls.notifications.some((entry) => entry.message.includes("shot.png")));
 });
 
 test("/image-attach without arguments explains itself", async () => {

@@ -119,8 +119,13 @@ function splitEscaped(line: string): string[] {
 	return out;
 }
 
+/** Quote characters a shell or file manager wraps a path in. */
+const QUOTES = new Set(['"', "'"]);
+
 function unescapeToken(token: string): string {
-	const quoted = token.length > 1 && token.startsWith('"') && token.endsWith('"');
+	const quote = token[0];
+	// macOS screenshot and file-manager apps copy paths in either quote style.
+	const quoted = token.length > 1 && quote !== undefined && QUOTES.has(quote) && token.endsWith(quote);
 	const body = quoted ? token.slice(1, -1) : token;
-	return body.replace(/\\ /g, " ").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+	return body.replace(/\\ /g, " ").replace(/\\(["'])/g, "$1").replace(/\\\\/g, "\\");
 }

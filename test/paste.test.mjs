@@ -65,6 +65,11 @@ test("extractImagePaths only accepts pure image path payloads", () => {
 	assert.deepEqual(extractImagePaths("/tmp/a.png\n/tmp/b.jpg\n"), ["/tmp/a.png", "/tmp/b.jpg"]);
 	assert.deepEqual(extractImagePaths("/tmp/my\\ shot.png"), ["/tmp/my shot.png"]);
 	assert.deepEqual(extractImagePaths('"/tmp/my shot.png"'), ["/tmp/my shot.png"]);
+	assert.deepEqual(extractImagePaths("'/tmp/my shot.png'"), ["/tmp/my shot.png"]);
+	assert.deepEqual(extractImagePaths("'/tmp/Screenshot 2026-09-29 at 18-37-57.png'"), [
+		"/tmp/Screenshot 2026-09-29 at 18-37-57.png",
+	]);
+	assert.deepEqual(extractImagePaths("'/tmp/a b.png' \"/tmp/c d.jpg\""), ["/tmp/a b.png", "/tmp/c d.jpg"]);
 	assert.deepEqual(extractImagePaths("/tmp/a.png /tmp/b.webp"), ["/tmp/a.png", "/tmp/b.webp"]);
 	assert.deepEqual(extractImagePaths("  /tmp/a.png  "), ["/tmp/a.png"]);
 	assert.deepEqual(extractImagePaths("/tmp/a.png notes.txt"), []);

@@ -70,9 +70,11 @@ const defaultEmptyText = (count: number) => (count === 1 ? "(1 image attached)" 
  * Fold pending images into a submitted message.
  *
  * A token that appears in the text is the user saying "send this one", so
- * images are matched on their tokens. If the editor was cleared and no token
- * survives, that is not an intent to drop every screenshot, so all pending
- * images are sent instead.
+ * images are matched on their tokens. If no token survives — a cleared editor,
+ * or any source without one to watch — that is not read as a decision to drop
+ * every screenshot, so all pending images are sent instead. In the TUI the
+ * editor is watched as you type, so a deleted token is already gone by now and
+ * this fallback only covers other input sources.
  */
 export function applyAttachments(text: string, pending: readonly PendingImage[], options: ApplyOptions): ApplyResult {
 	if (pending.length === 0) return { text, images: [], used: [], dropped: [] };
@@ -115,6 +117,16 @@ export function stripPlaceholders(text: string, pending: readonly PendingImage[]
 	let out = text;
 	for (const image of pending) out = out.split(placeholderToken(image)).join("");
 	return out;
+}
+
+/**
+ * The pending images whose token is no longer in the editor text.
+ *
+ * The token is the only handle the user has on an attachment, so deleting it
+ * means dropping the image rather than sending an image nobody can point at.
+ */
+export function unreferencedImages(text: string, pending: readonly PendingImage[]): PendingImage[] {
+	return pending.filter((image) => !text.includes(placeholderToken(image)));
 }
 
 /** Message shown by the composer widget. */

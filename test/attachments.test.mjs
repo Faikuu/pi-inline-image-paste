@@ -8,6 +8,7 @@ import {
 	describeImage,
 	placeholderToken,
 	stripPlaceholders,
+	unreferencedImages,
 } from "../lib/attachments.ts";
 import { pngBytes, gifBytes } from "./fixtures.mjs";
 
@@ -120,4 +121,24 @@ test("different formats keep their own mime type", () => {
 test("stripPlaceholders removes tokens without touching the rest", () => {
 	assert.equal(stripPlaceholders("a [image 1] b [image 2] c", [image(1), image(2)]), "a  b  c");
 	assert.equal(stripPlaceholders("nothing here", [image(1)]), "nothing here");
+});
+
+test("unreferencedImages finds the images whose token left the editor", () => {
+	const pending = [image(1), image(2), image(3)];
+	assert.deepEqual(
+		unreferencedImages("look [image 1] and [image 3]", pending).map((entry) => entry.index),
+		[2],
+	);
+	// A token the user is halfway through typing still counts as removed, because
+	// the pending list follows the tokens that are actually there.
+	assert.deepEqual(
+		unreferencedImages("[image 1] [image ]", pending).map((entry) => entry.index),
+		[2, 3],
+	);
+	assert.deepEqual(
+		unreferencedImages("", pending).map((entry) => entry.index),
+		[1, 2, 3],
+	);
+	assert.deepEqual(unreferencedImages("[image 1] [image 2] [image 3]", pending), []);
+	assert.deepEqual(unreferencedImages("[image 1]", []), []);
 });

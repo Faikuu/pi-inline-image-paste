@@ -19,7 +19,7 @@ import { readFile, stat } from "node:fs/promises";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI, ExtensionContext, InputEvent, InputEventResult } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, getNativeClipboard, matchesKey } from "@earendil-works/pi-tui";
-import { applyAttachments, attachmentSummary, describeImage, placeholderToken, stripPlaceholders, type ImageContent, type PendingImage } from "./lib/attachments.ts";
+import { applyAttachments, attachmentSummary, describeImage, placeholderToken, stripPlaceholders, unreferencedImages, type ImageContent, type PendingImage } from "./lib/attachments.ts";
 import { AttachmentBar, attachmentWidgetLines } from "./lib/attachment-bar.ts";
 import { readClipboardImage, readClipboardText } from "./lib/clipboard.ts";
 import { configPatch, DEFAULT_CONFIG, parseConfig, type ImagePasteConfig } from "./lib/config.ts";
@@ -48,6 +48,7 @@ export default function inlineImagePaste(pi: ExtensionAPI) {
 	let unsubscribeTerminal: (() => void) | undefined;
 	let interceptor: RawStdinInterceptor | undefined;
 	let pasting = false;
+	let reconcileQueued = false;
 
 	function notify(message: string, type: "info" | "warning" | "error" = "info"): void {
 		ctx?.ui.notify(message, type);
@@ -162,14 +163,52 @@ export default function inlineImagePaste(pi: ExtensionAPI) {
 				attach(image.bytes, image.mimeType);
 				return;
 			}
-			// Nothing on the clipboard but text: paste it, as pi itself would.
+			// Nothing on the clipboard but text: paste it, as pi itself would —
+			// unless the text is a path to an image, which is what screenshot and
+			// file-manager apps copy. Those attach rather than land as text.
 			const text = await readClipboardText({ nativeClipboard: () => getNativeClipboard() });
-			if (text) ctx.ui.pasteToEditor(text);
+			if (!text) return;
+			const paths = extractImagePaths(text);
+			if (paths.length === 0) {
+				ctx.ui.pasteToEditor(text);
+				return;
+			}
+			const failed = await attachFromPaths(paths);
+			if (failed.length === paths.length) ctx.ui.pasteToEditor(text);
 		} catch (error) {
 			notify(`Clipboard read failed: ${error instanceof Error ? error.message : String(error)}`, "error");
 		} finally {
 			pasting = false;
 		}
+	}
+
+	/**
+	 * Keep the pending list in step with the editor text.
+	 *
+	 * The token is the user's only handle on an attachment, so a token they
+	 * deleted is an image they do not want, and its thumbnail goes with it.
+	 */
+	function reconcileWithEditor(): void {
+		if (!ctx || pending.length === 0) return;
+		const dropped = unreferencedImages(ctx.ui.getEditorText(), pending);
+		if (dropped.length === 0) return;
+		pending = pending.filter((image) => !dropped.includes(image));
+		refreshWidget();
+		const labels = dropped.map((image) => image.name ?? `image #${image.index}`);
+		notify(`Removed ${labels.join(", ")}: its [image N] token left the message.`, "info");
+	}
+
+	/**
+	 * The editor has not processed the keystroke yet when the terminal handler
+	 * runs, so the check waits a turn, by which time the text reflects the edit.
+	 */
+	function scheduleReconcile(): void {
+		if (reconcileQueued || !ctx || ctx.mode !== "tui") return;
+		reconcileQueued = true;
+		setTimeout(() => {
+			reconcileQueued = false;
+			reconcileWithEditor();
+		}, 0);
 	}
 
 	function handleTerminalInput(data: string): { consume?: boolean } | undefined {
@@ -183,9 +222,15 @@ export default function inlineImagePaste(pi: ExtensionAPI) {
 
 		// A dropped or pasted image path: stand the image in for the path.
 		const sequence = splitPasteSequence(data);
-		if (!sequence || sequence.before !== "" || sequence.after !== "") return undefined;
+		if (!sequence || sequence.before !== "" || sequence.after !== "") {
+			scheduleReconcile();
+			return undefined;
+		}
 		const paths = extractImagePaths(sequence.payload);
-		if (paths.length === 0) return undefined;
+		if (paths.length === 0) {
+			scheduleReconcile();
+			return undefined;
+		}
 		void attachFromPaths(paths).then((failed) => {
 			// Not images after all, so put the text back exactly as it arrived.
 			if (failed.length === paths.length) ctx?.ui.pasteToEditor(sequence.payload);
