@@ -1,6 +1,6 @@
 {
   "name": "@faiku/pi-inline-image-paste",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Pi extension that attaches pasted images inline to your prompt instead of inserting a temporary file path",
   "author": "Faiku",
   "license": "MIT",
