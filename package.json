@@ -1,0 +1,53 @@
+{
+  "name": "@faiku/pi-inline-image-paste",
+  "version": "0.1.0",
+  "description": "Pi extension that attaches pasted images inline to your prompt instead of inserting a temporary file path",
+  "author": "Faiku",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi",
+    "image",
+    "clipboard",
+    "paste"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Faikuu/pi-inline-image-paste.git"
+  },
+  "homepage": "https://github.com/Faikuu/pi-inline-image-paste#readme",
+  "bugs": {
+    "url": "https://github.com/Faikuu/pi-inline-image-paste/issues"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "files": [
+    "index.ts",
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "^0.87.1",
+    "@types/node": "^22",
+    "typescript": "^5"
+  }
+}
